@@ -7,6 +7,8 @@ import aiohttp
 import aiofiles
 import asyncio
 
+from typing import ByteString, Tuple, Union
+
 
 class Storage(object):
     SUPPORTED_ARCHIVES = ("tar", "tar.gz", "tar.bz2")
@@ -29,37 +31,34 @@ class Storage(object):
     class Auth(object):
         THRESHOLD = 300
 
-        def __init__(self, token, storage, expires):
+        def __init__(self, token: str, storage: str, expires: str) -> None:
             self.token = token
             self.storage = storage[:-1]
             self.expires = datetime.now() + timedelta(seconds=int(expires))
 
-        def expired(self):
+        def expired(self) -> bool:
             left = self.expires - datetime.now()
             return (left.total_seconds() < self.THRESHOLD)
 
-    def __init__(self, user, key, ioloop):
+    def __init__(self, user: str, key: str) -> None:
         self.url = "https://auth.selcdn.ru/"
         self.user = user
         self.key = key
 
-        # if not hasattr(asyncio, 'get_running_loop'):
-        #     ioloop = asyncio.get_event_loop()
-        # else:
-        #     ioloop = asyncio.get_running_loop()
+        if not hasattr(asyncio, 'get_running_loop'):
+            ioloop = asyncio.get_event_loop()
+        else:
+            ioloop = asyncio.get_running_loop()
         ioloop.run_until_complete(self.authenticate())
 
-    async def authenticate(self):
+    async def authenticate(self) -> None:
         headers = {"X-Auth-User": self.user, "X-Auth-Key": self.key}
-        session = aiohttp.ClientSession(raise_for_status=True)
-        resp = await session.get(self.url, headers=headers, verify=True)
-
-        if resp.status != 204:
-            raise Exception("Selectel: Unexpected status code: %s" %
-                            r.status)
-
-        headers = resp.headers()
-        session.close()
+        async with aiohttp.ClientSession(raise_for_status=True) as session:
+            resp = await session.get(self.url, headers=headers)
+            if resp.status != 204:
+                raise Exception("Selectel: Unexpected status code: %s" %
+                                r.status)
+            headers = resp.headers
 
         auth = self.Auth(headers["X-Auth-Token"],
                          headers["X-Storage-Url"],
@@ -70,7 +69,10 @@ class Storage(object):
         self.session = session
 
     @update_expired
-    async def list(self, container, path=None, prefix=None):
+    async def list(self,
+                   container: object,
+                   path: str = None,
+                   prefix: str = None) -> dict:
         url = "%s/%s" % (self.auth.storage, container)
         params = {"format": "json"}
         if path is not None:
@@ -95,16 +97,18 @@ class Storage(object):
 
         clause = (lambda x: path != "" or "subdir" not in x)
 
-        async with self.session.get(url, params=params, verify=True) as resp:
+        async with self.session.get(url, params=params) as resp:
             rjson = await resp.json()
 
         return {
-            "/" + x["name"]: mapper(x) for x in rjson()
+            "/" + x["name"]: mapper(x) for x in rjson
             if clause(x)
         }
 
     @update_expired
-    async def get(self, container, path, headers=None):
+    async def get(self,
+                  container: object,
+                  path: str, headers: str = None) -> str:
         url = "%s/%s%s" % (self.auth.storage, container, path)
         if headers is None:
             headers = {}
@@ -113,7 +117,9 @@ class Storage(object):
         return rcont
 
     @update_expired
-    async def get_stream(self, container, path, headers=None, chunk_size=2**20):
+    async def get_stream(self, container: object,
+                         path: str, headers: str=None,
+                         chunk_size: int=2**20):
         url = "%s/%s%s" % (self.auth.storage, container, path)
         if headers is None:
             headers = {}
@@ -126,7 +132,10 @@ class Storage(object):
                 yield chunk
 
     @update_expired
-    async def put(self, container, path, content, headers=None, extract=None):
+    async def put(self, container: object,
+                  path: str, content: ByteString,
+                  headers: str=None,
+                  extract: str=None) -> Union[None, Tuple[str, str]]:
         url = "%s/%s%s" % (self.auth.storage, container, path)
         if headers is None:
             headers = {}
@@ -144,8 +153,10 @@ class Storage(object):
                 assert resp.status == 201
 
     @update_expired
-    async def put_stream(self, container, path, descriptor,
-                         headers=None, chunk=2**20, extract=None):
+    async def put_stream(self, container: object,
+                         path: str, descriptor,
+                         headers: str=None, chunk=2**20,
+                         extract: str=None) -> Union[None, Tuple[str, str]]:
         url = "%s/%s%s" % (self.auth.storage, container, path)
         if headers is None:
             headers = {}
@@ -168,8 +179,10 @@ class Storage(object):
                 assert resp.status == 201
 
     @update_expired
-    async def put_file(self, container, path, filename, headers=None,
-                       extract=None):
+    async def put_file(self, container: object,
+                       path: str, filename: str,
+                       headers: str=None,
+                       extract: str=None) -> Union[None, Tuple[str, str]]:
         url = "%s/%s%s" % (self.auth.storage, container, path)
         chunk_size = 2 ** 20
         if headers is None:
@@ -185,9 +198,8 @@ class Storage(object):
                     yield chunk
                     chunk = await fl.read(chunk_size)
 
-        async with aiofiles.open(filename, 'rb') as fl:
-            resp = await self.session.put(url, data=file_sender(),
-                                          headers=headers)
+        resp = await self.session.put(url, data=file_sender(),
+                                        headers=headers)
 
         if extract in self.SUPPORTED_ARCHIVES:
             assert resp.status == 200
@@ -197,7 +209,7 @@ class Storage(object):
             assert resp.status == 201
 
     @update_expired
-    async def remove(self, container, path, force=False):
+    async def remove(self, container, path: str, force: bool=False):
         url = "%s/%s%s" % (self.auth.storage, container, path)
         resp = await self.session.delete(url)
         if force:
@@ -207,7 +219,7 @@ class Storage(object):
         return resp.headers
 
     @update_expired
-    async def copy(self, container, src, dst, headers=None):
+    async def copy(self, container, src, dst, headers=None) -> None:
         dst = "%s/%s%s" % (self.auth.storage, container, dst)
         src = "%s%s" % (container, src)
         if headers is None:
