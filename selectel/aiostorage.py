@@ -10,8 +10,10 @@ import asyncio
 from typing import ByteString, Tuple, Union
 
 
-class Storage(object):
-    SUPPORTED_ARCHIVES = ("tar", "tar.gz", "tar.bz2")
+SUPPORTED_ARCHIVES = ("tar", "tar.gz", "tar.bz2")
+
+
+class Storage:
 
     def update_expired(fn):
         async def wrapper(storage, *args, **kwargs):
@@ -28,7 +30,7 @@ class Storage(object):
                     raise err
         return wrapper
 
-    class Auth(object):
+    class Auth:
         THRESHOLD = 300
 
         def __init__(self, token: str, storage: str, expires: str) -> None:
@@ -139,13 +141,13 @@ class Storage(object):
         url = "%s/%s%s" % (self.auth.storage, container, path)
         if headers is None:
             headers = {}
-        if extract in self.SUPPORTED_ARCHIVES:
+        if extract in SUPPORTED_ARCHIVES:
             url += "?extract-archive=%s" % extract
             headers["Accept"] = "application/json"
         if not extract:
             headers["ETag"] = hashlib.md5(content).hexdigest()
         async with self.session.put(url, data=content, headers=headers) as resp:
-            if extract in self.SUPPORTED_ARCHIVES:
+            if extract in SUPPORTED_ARCHIVES:
                 assert resp.status == 201
                 answer = await resp.json()
                 return (answer["Number Files Created"], answer["Errors"])
@@ -160,7 +162,7 @@ class Storage(object):
         url = "%s/%s%s" % (self.auth.storage, container, path)
         if headers is None:
             headers = {}
-        if extract in self.SUPPORTED_ARCHIVES:
+        if extract in SUPPORTED_ARCHIVES:
             url += "?extract-archive=%s" % extract
             headers["Accept"] = "application/json"
 
@@ -171,7 +173,7 @@ class Storage(object):
                 data = descriptor.read(chunk)
 
         async with self.session.put(url, data=gen(), headers=headers) as resp:
-            if extract in self.SUPPORTED_ARCHIVES:
+            if extract in SUPPORTED_ARCHIVES:
                 assert resp.status == 200
                 answer = await resp.json()
                 return (answer["Number Files Created"], answer["Errors"])
@@ -187,7 +189,7 @@ class Storage(object):
         chunk_size = 2 ** 20
         if headers is None:
             headers = {}
-        if extract in self.SUPPORTED_ARCHIVES:
+        if extract in SUPPORTED_ARCHIVES:
             url += "?extract-archive=%s" % extract
             headers["Accept"] = "application/json"
 
@@ -201,7 +203,7 @@ class Storage(object):
         resp = await self.session.put(url, data=file_sender(),
                                         headers=headers)
 
-        if extract in self.SUPPORTED_ARCHIVES:
+        if extract in SUPPORTED_ARCHIVES:
             assert resp.status == 200
             answer = await resp.json()
             return (answer["Number Files Created"], answer["Errors"])
@@ -270,7 +272,7 @@ class Storage(object):
         assert resp.status in (201, 202)
 
     @update_expired
-    async def drop(self, container, force=False, recursive=False):
+    async def drop(self, container, force: bool=False, recursive: bool=False):
         url = "%s/%s" % (self.auth.storage, container)
         if recursive:
             for filename in self.list(container):
@@ -278,11 +280,11 @@ class Storage(object):
         resp = await self.session.delete(url)
         if force:
             if resp.status == 404:
-                pass
+                return resp.headers
         assert resp.status == 204
 
 
-class Container(object):
+class Container:
     METHODS = ["list", "get", "get_stream", "put",
                "put_stream", "put_file", "remove",
                "copy", "info"]

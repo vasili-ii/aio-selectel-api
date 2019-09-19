@@ -94,17 +94,3 @@ And last that you can do:
 	>>> await container.remove("/test1.file")
 	>>> await container.list("/").keys()
 	[u'/test4.file', u'/test2.file']
-
-### Running tests ###
-
-Add file **tests/credentials.json**  with your credentials:
-
-	{
-		"auth": "my-selectel-login",
-		"key": "my-selectel-password"
-	}
-
-Then, run
-
-	tox
-
