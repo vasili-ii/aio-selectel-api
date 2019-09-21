@@ -7,7 +7,7 @@ import aiohttp
 import aiofiles
 import asyncio
 
-from typing import ByteString, Tuple, Union
+from typing import ByteString, Tuple, Union, Dict, AsyncGenerator
 
 
 SUPPORTED_ARCHIVES = ("tar", "tar.gz", "tar.bz2")
@@ -54,12 +54,13 @@ class Storage:
         ioloop.run_until_complete(self.authenticate())
 
     async def authenticate(self) -> None:
-        headers = {"X-Auth-User": self.user, "X-Auth-Key": self.key}
+        headers: Dict[str, str] = {"X-Auth-User": self.user,
+                                   "X-Auth-Key": self.key}
         async with aiohttp.ClientSession(raise_for_status=True) as session:
             resp = await session.get(self.url, headers=headers)
             if resp.status != 204:
                 raise Exception("Selectel: Unexpected status code: %s" %
-                                r.status)
+                                resp.status)
             headers = resp.headers
 
         auth = self.Auth(headers["X-Auth-Token"],
@@ -110,37 +111,29 @@ class Storage:
     @update_expired
     async def get(self,
                   container: object,
-                  path: str, headers: str = None) -> str:
+                  path: str, headers: Dict[str, str] = dict()) -> str:
         url = "%s/%s%s" % (self.auth.storage, container, path)
-        if headers is None:
-            headers = {}
         async with self.session.get(url, headers=headers) as resp:
             rcont = await resp.text()
         return rcont
 
     @update_expired
     async def get_stream(self, container: object,
-                         path: str, headers: str=None,
-                         chunk_size: int=2**20):
+                         path: str, headers: Dict[str, str] = dict(),
+                         chunk_size: int=2**20) -> AsyncGenerator:
         url = "%s/%s%s" % (self.auth.storage, container, path)
-        if headers is None:
-            headers = {}
         async with self.session.get(url, headers=headers) as resp:
-            content = resp.content
-            while True:
-                chunk = await resp.content.read(chunk_size)
-                if not chunk:
-                    break
+            chunk = await resp.content.read(chunk_size)
+            while chunk:
                 yield chunk
+                chunk = await resp.content.read(chunk_size)
 
     @update_expired
     async def put(self, container: object,
-                  path: str, content: ByteString,
-                  headers: str=None,
+                  path: str, content: Union[bytes, bytearray],
+                  headers: Dict[str, str] = dict(),
                   extract: str=None) -> Union[None, Tuple[str, str]]:
         url = "%s/%s%s" % (self.auth.storage, container, path)
-        if headers is None:
-            headers = {}
         if extract in SUPPORTED_ARCHIVES:
             url += "?extract-archive=%s" % extract
             headers["Accept"] = "application/json"
@@ -157,11 +150,10 @@ class Storage:
     @update_expired
     async def put_stream(self, container: object,
                          path: str, descriptor,
-                         headers: str=None, chunk=2**20,
+                         headers: Dict[str, str] = dict(),
+                         chunk=2**20,
                          extract: str=None) -> Union[None, Tuple[str, str]]:
         url = "%s/%s%s" % (self.auth.storage, container, path)
-        if headers is None:
-            headers = {}
         if extract in SUPPORTED_ARCHIVES:
             url += "?extract-archive=%s" % extract
             headers["Accept"] = "application/json"
@@ -183,12 +175,10 @@ class Storage:
     @update_expired
     async def put_file(self, container: object,
                        path: str, filename: str,
-                       headers: str=None,
+                       headers: Dict[str, str] = dict(),
                        extract: str=None) -> Union[None, Tuple[str, str]]:
         url = "%s/%s%s" % (self.auth.storage, container, path)
         chunk_size = 2 ** 20
-        if headers is None:
-            headers = {}
         if extract in SUPPORTED_ARCHIVES:
             url += "?extract-archive=%s" % extract
             headers["Accept"] = "application/json"

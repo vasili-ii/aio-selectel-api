@@ -19,6 +19,7 @@ lib
 lib64
 __pycache__
 .ropeproject*
+.mypy_cache*
 
 # Installer logs
 pip-log.txt
